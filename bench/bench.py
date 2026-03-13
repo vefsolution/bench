@@ -457,7 +457,7 @@ class BenchSetup(Base):
             )
 
         return self.run(
-            f"{self.bench.python} -m pip install {quiet_flag} --upgrade pip{pip_version}",
+            f"{self.bench.python} -m pip install {quiet_flag} --upgrade pip==24.0",
             cwd=self.bench.name,
         )
 
