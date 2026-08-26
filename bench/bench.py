@@ -34,7 +34,7 @@ from bench.utils.bench import (
 	get_env_cmd,
 )
 from bench.utils.render import job, step
-from bench.utils.app import get_current_version
+from bench.utils.app import get_app_name, get_current_version
 from bench.utils.system import get_mariadb_pkgconfig_path, check_pkg_config
 from bench.app import is_git_repo
 
@@ -284,7 +284,8 @@ class BenchApps(MutableSequence):
 			self.apps = [
 				x
 				for x in os.listdir(os.path.join(self.bench.name, "apps"))
-				if is_frappe_app(os.path.join(self.bench.name, "apps", x))
+				# Directories with "." in name are usually git worktrees, not apps
+				if "." not in x and is_frappe_app(os.path.join(self.bench.name, "apps", x))
 			]
 			self.apps.remove("frappe")
 			self.apps.insert(0, "frappe")
@@ -390,7 +391,7 @@ class BenchSetup(Base):
 
 				if use_uv():
 					self.run(
-						f"uv pip install {quiet_flag} --upgrade -e {frappe} --python {self.bench.python}",
+						f"uv pip install {quiet_flag} -e {frappe} --python {self.bench.python}",
 						cwd=self.bench.name, env=env,
 					)
 				else:
@@ -532,7 +533,15 @@ class BenchSetup(Base):
 					}
 
 			if use_uv():
-				self.run(f"uv pip install {quiet_flag} --upgrade -e {app_path} --python {self.bench.python}", env=env)
+				upgrade_package = get_app_name(self.bench.name, app)
+				# Scope the upgrade to the app itself so uv doesn't eagerly bump shared
+				# transitive deps that already satisfy other installed apps' constraints.
+				# `uv pip install --upgrade` upgrades everything (eager), unlike pip's
+				# default only-if-needed strategy. See frappe/bench#1683.
+				self.run(
+					f"uv pip install {quiet_flag} --upgrade-package {upgrade_package} -e {app_path} --python {self.bench.python}",
+					env=env,
+				)
 			else:
 				self.run(f"{self.bench.python} -m pip install {quiet_flag} --upgrade -e {app_path}", env=env)
 
